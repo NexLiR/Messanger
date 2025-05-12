@@ -2,11 +2,16 @@
 using System.Net.Sockets;
 using ChatServer.Constants;
 using ChatServer.Core.Net.IO;
+using ChatServer.Data.Entities;
+using ChatServer.Data.Repositories;
 
 namespace ChatServer.Core.Net
 {
     public class Client : IClient, IDisposable
     {
+        private readonly IUserRepository _userRepository;
+        private User _user;
+
         private readonly IClientManager _clientManager;
         private readonly IMessageHandler _messageHandler;
         private readonly IPacketReader _packetReader;
@@ -19,11 +24,13 @@ namespace ChatServer.Core.Net
         public Client(
             TcpClient clientSocket,
             IClientManager clientManager,
-            IMessageHandler messageHandler)
+            IMessageHandler messageHandler,
+            IUserRepository userRepository)
         {
             ClientSocket = clientSocket ?? throw new ArgumentNullException(nameof(clientSocket));
             _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
             _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
+            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
 
             UID = Guid.NewGuid();
             _packetReader = new PacketReader(ClientSocket.GetStream());
@@ -37,6 +44,8 @@ namespace ChatServer.Core.Net
                 }
 
                 UserName = _packetReader.ReadMessage();
+
+                _user = _userRepository.CreateUserAsync(UserName, UID).GetAwaiter().GetResult();
 
                 Console.WriteLine($"[{DateTime.Now}]: Client <{UserName}> connected: {ClientSocket.Client.RemoteEndPoint}");
             }
