@@ -1,7 +1,8 @@
-﻿using ChatServer.Core.Interfaces;
+﻿using ChatApp.Core.Interfaces;
+using System.IO;
 using System.Text;
 
-namespace ChatServer.Core.Net.IO
+namespace ChatApp.Core.Net.IO
 {
     public class PacketBuilder : IPacketBuilder, IDisposable
     {

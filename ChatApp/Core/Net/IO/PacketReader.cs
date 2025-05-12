@@ -1,8 +1,9 @@
-﻿using ChatServer.Core.Interfaces;
+﻿using ChatApp.Core.Interfaces;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 
-namespace ChatServer.Core.Net.IO
+namespace ChatApp.Core.Net.IO
 {
     public class PacketReader : IPacketReader, IDisposable
     {
@@ -32,7 +33,7 @@ namespace ChatServer.Core.Net.IO
             try
             {
                 var length = _reader.ReadInt32();
-                if (length <= 0 || length > 1024 * 1024 * 16) // 1024 * 1024 *16 = 16 MB
+                if (length <= 0 || length > 1024 * 1024 * 16)
                 {
                     throw new InvalidOperationException("Invalid message length.");
                 }
