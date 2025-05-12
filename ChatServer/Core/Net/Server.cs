@@ -2,6 +2,7 @@
 using ChatServer.Core.Interfaces;
 using System.Net.Sockets;
 using System.Net;
+using ChatServer.Data.Repositories;
 
 namespace ChatServer.Core.Net
 {
@@ -9,15 +10,18 @@ namespace ChatServer.Core.Net
     {
         private readonly IClientManager _clientManager;
         private readonly IMessageHandler _messageHandler;
+        private readonly IUserRepository _userRepository;
         private TcpListener _listener;
         private bool _isRunning;
 
         public Server(
             IClientManager clientManager,
-            IMessageHandler messageHandler)
+            IMessageHandler messageHandler,
+            IUserRepository userRepository)
         {
             _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
             _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
+            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
         }
 
         public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -39,7 +43,7 @@ namespace ChatServer.Core.Net
 
                     try
                     {
-                        var client = new Client(tcpClient, _clientManager, _messageHandler);
+                        var client = new Client(tcpClient, _clientManager, _messageHandler, _userRepository);
                         _clientManager.AddClient(client);
 
                         await _clientManager.BroadcastConnectionAsync();

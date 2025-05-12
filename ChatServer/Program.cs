@@ -11,7 +11,7 @@ namespace ChatServer
             var host = Host.CreateDefaultBuilder(args)
                 .ConfigureServices((context, services) =>
                 {
-                    services.RegisterChatServerServices();
+                    services.RegisterChatServerServices(context.Configuration);
                 })
                 .Build();
 
