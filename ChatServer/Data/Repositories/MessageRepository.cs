@@ -29,7 +29,7 @@ namespace ChatServer.Data.Repositories
             return message;
         }
 
-        public async Task<IEnumerable<Message>> GetRecentBroadcastMessagesAsync(int count = 50)
+        public async Task<IEnumerable<Message>> GetRecentBroadcastMessagesAsync(int count = 30)
         {
             return await _context.Messages
                 .Include(m => m.Sender)

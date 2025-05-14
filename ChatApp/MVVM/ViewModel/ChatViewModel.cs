@@ -66,11 +66,6 @@ namespace ChatApp.MVVM.ViewModel
                 async _ => await SendMessageAsync(),
                 _ => !string.IsNullOrWhiteSpace(Message)
             );
-
-            LogoutCommand = new RelayCommand(
-                async _ => await LogoutAsync(),
-                _ => true
-            );
         }
 
         private async Task ConnectToServerAsync()
@@ -95,22 +90,6 @@ namespace ChatApp.MVVM.ViewModel
             catch (Exception ex)
             {
                 MessageBox.Show($"Send message error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private async Task LogoutAsync()
-        {
-            try
-            {
-                await _serverConnection.DisconnectAsync();
-                await _authService.LogoutAsync();
-
-                _messageService.ClearMessages();
-                _userService.ClearUsers();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Logout error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

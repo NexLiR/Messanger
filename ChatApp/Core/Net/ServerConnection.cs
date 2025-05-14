@@ -65,6 +65,10 @@ namespace ChatApp.Core.Net
                             var message = _packetReader.ReadMessage();
                             OnMessageReceived?.Invoke(message);
                             break;
+                        case OpCodes.MessageHistory:
+                            var historyMessage = _packetReader.ReadMessage();
+                            OnMessageReceived?.Invoke(historyMessage);
+                            break;
                         case OpCodes.Disconnect:
                             var disconnectedUserId = _packetReader.ReadMessage();
                             OnUserDisconnected?.Invoke(disconnectedUserId);

@@ -11,5 +11,7 @@
         public const byte Login = 3;
         public const byte AuthSuccess = 4;
         public const byte AuthFailed = 11;
+
+        public const byte MessageHistory = 12;
     }
 }

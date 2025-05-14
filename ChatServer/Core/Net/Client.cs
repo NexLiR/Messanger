@@ -10,6 +10,7 @@ namespace ChatServer.Core.Net
     public class Client : IClient, IDisposable
     {
         private readonly IUserRepository _userRepository;
+        private readonly IMessageRepository _messageRepository;
         private User _user;
 
         private readonly IClientManager _clientManager;
@@ -25,17 +26,20 @@ namespace ChatServer.Core.Net
              TcpClient clientSocket,
              IClientManager clientManager,
              IMessageHandler messageHandler,
-             IUserRepository userRepository)
+             IUserRepository userRepository,
+             IMessageRepository messageRepository)
         {
             ClientSocket = clientSocket ?? throw new ArgumentNullException(nameof(clientSocket));
             _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
             _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
             _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
+            _messageRepository = messageRepository ?? throw new ArgumentNullException(nameof(messageRepository));
 
             UID = Guid.NewGuid();
             _packetReader = new PacketReader(ClientSocket.GetStream());
 
             Console.WriteLine($"[{DateTime.Now}]: New connection established: {ClientSocket.Client.RemoteEndPoint}");
+            _messageRepository = messageRepository;
         }
 
         public async Task ProcessAsync()
@@ -154,6 +158,9 @@ namespace ChatServer.Core.Net
                 await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
 
                 Console.WriteLine($"[{DateTime.Now}]: User {username} logged in successfully");
+
+                await SendMessageHistoryAsync();
+
                 await _clientManager.BroadcastConnectionAsync();
             }
             catch (Exception ex)
@@ -164,6 +171,40 @@ namespace ChatServer.Core.Net
 
                 await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
                 Console.WriteLine($"[{DateTime.Now}]: Login failed for {username}: {ex.Message}");
+            }
+        }
+
+        private async Task SendMessageHistoryAsync()
+        {
+            try
+            {
+                var recentMessages = await _messageRepository.GetRecentBroadcastMessagesAsync(30);
+
+                var orderedMessages = recentMessages.Reverse();
+
+                foreach (var message in orderedMessages)
+                {
+                    var formattedMessage = $"[{message.SentAt.ToString("yyyy-MM-dd HH:mm:ss")}]: [{message.Sender.UserName}]: {message.Content}";
+
+                    using var historyPacket = new PacketBuilder();
+                    historyPacket.WriteOpCode(OpCodes.MessageHistory);
+                    historyPacket.WriteMessage(formattedMessage);
+
+                    await ClientSocket.Client.SendAsync(historyPacket.GetPacketBytes(), SocketFlags.None);
+
+                    await Task.Delay(10);
+                }
+
+                using var completionPacket = new PacketBuilder();
+                completionPacket.WriteOpCode(OpCodes.MessageHistory);
+                completionPacket.WriteMessage("--- End of message history ---");
+                await ClientSocket.Client.SendAsync(completionPacket.GetPacketBytes(), SocketFlags.None);
+
+                Console.WriteLine($"[{DateTime.Now}]: Message history sent to {UserName}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{DateTime.Now}]: Error sending message history: {ex.Message}");
             }
         }
 

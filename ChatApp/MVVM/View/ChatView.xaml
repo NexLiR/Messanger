@@ -33,11 +33,6 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-
-            <Button Grid.Row="2" 
-                    Content="Logout" 
-                    Command="{Binding LogoutCommand}"
-                    Style="{StaticResource BaseButtomStyle}"/>
         </Grid>
 
         <Grid Grid.Column="1">

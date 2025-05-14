@@ -19,6 +19,11 @@ namespace ChatServer.Core.Net.IO
 
         public void WriteMessage(string message)
         {
+            if (message == null)
+            {
+                message = string.Empty;
+            }
+
             var messageLength = message.Length;
             _ms.Write(BitConverter.GetBytes(messageLength));
             _ms.Write(Encoding.UTF8.GetBytes(message));
