@@ -17,15 +17,15 @@ namespace ChatServer.Core.Net
         private readonly IPacketReader _packetReader;
         private bool _isConnected = true;
 
-        public string UserName { get; }
+        public string UserName { get; set; }
         public Guid UID { get; }
         public TcpClient ClientSocket { get; }
 
         public Client(
-            TcpClient clientSocket,
-            IClientManager clientManager,
-            IMessageHandler messageHandler,
-            IUserRepository userRepository)
+             TcpClient clientSocket,
+             IClientManager clientManager,
+             IMessageHandler messageHandler,
+             IUserRepository userRepository)
         {
             ClientSocket = clientSocket ?? throw new ArgumentNullException(nameof(clientSocket));
             _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
@@ -35,26 +35,7 @@ namespace ChatServer.Core.Net
             UID = Guid.NewGuid();
             _packetReader = new PacketReader(ClientSocket.GetStream());
 
-            try
-            {
-                var opcode = _packetReader.ReadByte();
-                if (opcode != OpCodes.Connect)
-                {
-                    throw new InvalidOperationException($"Expected connect opcode {OpCodes.Connect}, got {opcode}");
-                }
-
-                UserName = _packetReader.ReadMessage();
-
-                _user = _userRepository.CreateUserAsync(UserName, UID).GetAwaiter().GetResult();
-
-                Console.WriteLine($"[{DateTime.Now}]: Client <{UserName}> connected: {ClientSocket.Client.RemoteEndPoint}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error during client initialization: {ex.Message}");
-                Dispose();
-                throw;
-            }
+            Console.WriteLine($"[{DateTime.Now}]: New connection established: {ClientSocket.Client.RemoteEndPoint}");
         }
 
         public async Task ProcessAsync()
@@ -73,6 +54,18 @@ namespace ChatServer.Core.Net
                                 var message = _packetReader.ReadMessage();
                                 Console.WriteLine($"[{DateTime.Now}]: Message received from {UserName}: {message}");
                                 await _messageHandler.HandleMessageAsync(this, message);
+                                break;
+
+                            case OpCodes.Register:
+                                var registerUsername = _packetReader.ReadMessage();
+                                var registerPassword = _packetReader.ReadMessage();
+                                await HandleRegisterAsync(registerUsername, registerPassword);
+                                break;
+
+                            case OpCodes.Login:
+                                var loginUsername = _packetReader.ReadMessage();
+                                var loginPassword = _packetReader.ReadMessage();
+                                await HandleLoginAsync(loginUsername, loginPassword);
                                 break;
 
                             default:
@@ -100,6 +93,77 @@ namespace ChatServer.Core.Net
                 }
 
                 Dispose();
+            }
+        }
+
+        private async Task HandleRegisterAsync(string username, string password)
+        {
+            try
+            {
+                var user = await _userRepository.CreateUserAsync(username, password);
+
+                UserName = user.UserName;
+                _user = user;
+
+                using var packet = new PacketBuilder();
+                packet.WriteOpCode(OpCodes.AuthSuccess);
+                packet.WriteMessage(user.UserName);
+                packet.WriteMessage(user.UID.ToString());
+
+                await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
+
+                Console.WriteLine($"[{DateTime.Now}]: User {username} registered successfully");
+                await _clientManager.BroadcastConnectionAsync();
+            }
+            catch (Exception ex)
+            {
+                using var packet = new PacketBuilder();
+                packet.WriteOpCode(OpCodes.AuthFailed);
+                packet.WriteMessage($"Registration failed: {ex.Message}");
+
+                await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
+                Console.WriteLine($"[{DateTime.Now}]: Registration failed for {username}: {ex.Message}");
+            }
+        }
+
+        private async Task HandleLoginAsync(string username, string password)
+        {
+            try
+            {
+                var user = await _userRepository.AuthenticateUserAsync(username, password);
+
+                if (user == null)
+                {
+                    using var failedPacket = new PacketBuilder();
+                    failedPacket.WriteOpCode(OpCodes.AuthFailed);
+                    failedPacket.WriteMessage("Invalid username or password");
+
+                    await ClientSocket.Client.SendAsync(failedPacket.GetPacketBytes(), SocketFlags.None);
+                    Console.WriteLine($"[{DateTime.Now}]: Login failed for {username}: Invalid credentials");
+                    return;
+                }
+
+                UserName = user.UserName;
+                _user = user;
+
+                using var packet = new PacketBuilder();
+                packet.WriteOpCode(OpCodes.AuthSuccess);
+                packet.WriteMessage(user.UserName);
+                packet.WriteMessage(user.UID.ToString());
+
+                await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
+
+                Console.WriteLine($"[{DateTime.Now}]: User {username} logged in successfully");
+                await _clientManager.BroadcastConnectionAsync();
+            }
+            catch (Exception ex)
+            {
+                using var packet = new PacketBuilder();
+                packet.WriteOpCode(OpCodes.AuthFailed);
+                packet.WriteMessage($"Login failed: {ex.Message}");
+
+                await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
+                Console.WriteLine($"[{DateTime.Now}]: Login failed for {username}: {ex.Message}");
             }
         }
 
