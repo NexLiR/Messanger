@@ -4,79 +4,21 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ChatApp"
-        xmlns:viewmodel="clr-namespace:ChatApp.MVVM.ViewModel"
+        xmlns:view="clr-namespace:ChatApp.MVVM.View"
+        xmlns:viewModel="clr-namespace:ChatApp.MVVM.ViewModel"
         mc:Ignorable="d"
         Title="Chat Application" Height="600" Width="900">
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="250"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type viewModel:LoginViewModel}">
+            <view:LoginView />
+        </DataTemplate>
 
-        <Grid Grid.Column="0" Background="#F0F0F0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <DataTemplate DataType="{x:Type viewModel:ChatViewModel}">
+            <view:ChatView />
+        </DataTemplate>
+    </Window.Resources>
 
-            <TextBox Grid.Row="0" 
-                     Text="{Binding UserName, UpdateSourceTrigger=PropertyChanged}"
-                     Style="{StaticResource BaseTextBoxStyle}"/>
+    <ContentControl Content="{Binding CurrentView}" />
 
-            <Button Grid.Row="1" 
-                    Content="Connect" 
-                    Command="{Binding ConnectCommand}"
-                    Style="{StaticResource BaseButtomStyle}"/>
-
-            <ListView Grid.Row="2" 
-                      ItemsSource="{Binding Users}"
-                      Margin="5">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" Margin="5,2"/>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-        </Grid>
-
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <ListView Grid.Row="0" 
-                      ItemsSource="{Binding Messages}"
-                      Margin="5">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="5,2"/>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-
-            <Grid Grid.Row="1">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBox Grid.Column="0" 
-                         Text="{Binding Message, UpdateSourceTrigger=PropertyChanged}"
-                         Style="{StaticResource BaseTextBoxStyle}"
-                         AcceptsReturn="True"
-                         TextWrapping="Wrap"
-                         Height="80"
-                         VerticalScrollBarVisibility="Auto"/>
-
-                <Button Grid.Column="1" 
-                        Content="Send" 
-                        Command="{Binding SendMessageCommand}"
-                        Style="{StaticResource BaseButtomStyle}"
-                        Width="100"/>
-            </Grid>
-        </Grid>
-    </Grid>
 </Window>

@@ -2,11 +2,13 @@
 using ChatApp.Constants;
 using ChatApp.Core.Interfaces;
 using ChatApp.Core.Net.IO;
+using ChatApp.Core.Services.Interfaces;
 
 namespace ChatApp.Core.Net
 {
     public class ServerConnection : IServerConnection, IDisposable
     {
+        private readonly IAuthService _authService;
         private TcpClient _client;
         private IPacketReader _packetReader;
         private NetworkStream _networkStream;
@@ -16,16 +18,17 @@ namespace ChatApp.Core.Net
         public event Action<string> OnUserConnected;
         public event Action<string> OnUserDisconnected;
 
-        public ServerConnection()
+        public ServerConnection(IAuthService authService)
         {
+            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
             _client = new TcpClient();
             _cancellationTokenSource = new CancellationTokenSource();
         }
 
         public async Task ConnectAsync(string userName)
         {
-            if (string.IsNullOrWhiteSpace(userName))
-                throw new ArgumentException("Username cannot be empty", nameof(userName));
+            if (!_authService.IsAuthenticated)
+                throw new InvalidOperationException("You must be authenticated to connect");
 
             if (_client.Connected)
                 return;
@@ -35,11 +38,6 @@ namespace ChatApp.Core.Net
                 await _client.ConnectAsync(ServerConfig.DefaultIpAddress, ServerConfig.DefaultPort);
                 _networkStream = _client.GetStream();
                 _packetReader = new PacketReader(_networkStream);
-
-                using var connectPacket = new PacketBuilder();
-                connectPacket.WriteOpCode(OpCodes.Connect);
-                connectPacket.WriteMessage(userName);
-                _client.Client.Send(connectPacket.GetPacketBytes());
 
                 _ = Task.Run(ProcessIncomingMessagesAsync);
             }
@@ -84,6 +82,9 @@ namespace ChatApp.Core.Net
         {
             if (string.IsNullOrWhiteSpace(message))
                 return;
+
+            if (!_client.Connected || !_authService.IsAuthenticated)
+                throw new InvalidOperationException("Not connected or not authenticated");
 
             try
             {

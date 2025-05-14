@@ -1,5 +1,7 @@
 ﻿using ChatServer.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ChatServer.Data.Repositories
 {
@@ -24,20 +26,20 @@ namespace ChatServer.Data.Repositories
                 .FirstOrDefaultAsync(u => u.UserName == username);
         }
 
-        public async Task<User> CreateUserAsync(string username, Guid uid)
+        public async Task<User> CreateUserAsync(string username, string password)
         {
-            var existingUser = await GetByUsernameAsync(username);
-            if (existingUser != null)
+            if (await GetByUsernameAsync(username) != null)
             {
-                await SaveChangesAsync();
-                return existingUser;
+                throw new InvalidOperationException($"Username '{username}' is already taken.");
             }
 
+            var passwordHash = HashPassword(password);
             var user = new User
             {
                 UserName = username,
-                UID = uid,
+                UID = Guid.NewGuid(),
                 Created = DateTime.Now,
+                PasswordHash = passwordHash
             };
 
             await _context.Users.AddAsync(user);
@@ -45,6 +47,31 @@ namespace ChatServer.Data.Repositories
             return user;
         }
 
+        public async Task<User> AuthenticateUserAsync(string username, string password)
+        {
+            var user = await GetByUsernameAsync(username);
+            if (user == null || !VerifyPassword(password, user.PasswordHash))
+            {
+                return null;
+            }
+            return user;
+        }
+
+        private string HashPassword(string password)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(password);
+                byte[] hash = sha256.ComputeHash(bytes);
+                return Convert.ToBase64String(hash);
+            }
+        }
+
+        private bool VerifyPassword(string password, string passwordHash)
+        {
+            string hashedInput = HashPassword(password);
+            return hashedInput == passwordHash;
+        }
         public async Task<IEnumerable<User>> GetAllUsersAsync()
         {
             return await _context.Users.ToListAsync();

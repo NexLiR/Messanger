@@ -11,11 +11,14 @@ namespace ChatApp.Extensions
     {
         public static IServiceCollection RegisterChatServices(this IServiceCollection services)
         {
+            services.AddSingleton<IAuthService, AuthService>();
             services.AddSingleton<IServerConnection, ServerConnection>();
             services.AddSingleton<IMessageService, MessageService>();
             services.AddSingleton<IUserService, UserService>();
 
-            services.AddTransient<MainViewModel>();
+            services.AddTransient<LoginViewModel>();
+            services.AddTransient<ChatViewModel>();
+            services.AddSingleton<MainViewModel>();
 
             return services;
         }
