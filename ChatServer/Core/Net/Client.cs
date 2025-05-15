@@ -11,11 +11,11 @@ namespace ChatServer.Core.Net
     {
         private readonly IUserRepository _userRepository;
         private readonly IMessageRepository _messageRepository;
-        private User _user;
-
         private readonly IClientManager _clientManager;
         private readonly IMessageHandler _messageHandler;
         private readonly IPacketReader _packetReader;
+        private User _user;
+
         private bool _isConnected = true;
         private bool _isAuthenticated = false;
 
@@ -24,11 +24,11 @@ namespace ChatServer.Core.Net
         public TcpClient ClientSocket { get; }
 
         public Client(
-             TcpClient clientSocket,
-             IClientManager clientManager,
-             IMessageHandler messageHandler,
-             IUserRepository userRepository,
-             IMessageRepository messageRepository)
+            TcpClient clientSocket,
+            IClientManager clientManager,
+            IMessageHandler messageHandler,
+            IUserRepository userRepository,
+            IMessageRepository messageRepository)
         {
             ClientSocket = clientSocket ?? throw new ArgumentNullException(nameof(clientSocket));
             _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
@@ -59,7 +59,6 @@ namespace ChatServer.Core.Net
                                     SendAuthFailedMessage("You must authenticate first.");
                                     continue;
                                 }
-
                                 var message = _packetReader.ReadMessage();
                                 Console.WriteLine($"[{DateTime.Now}]: Message received from {UserName}: {message}");
                                 await _messageHandler.HandleMessageAsync(this, message);
@@ -128,7 +127,6 @@ namespace ChatServer.Core.Net
             try
             {
                 var user = await _userRepository.GetByUsernameAsync(username);
-
                 if (user == null)
                 {
                     SendAuthFailedMessage($"User '{username}' not found.");
@@ -144,6 +142,7 @@ namespace ChatServer.Core.Net
 
                 await SendMessageHistoryAsync();
 
+                _clientManager.AddClient(this);
                 await _clientManager.BroadcastConnectionAsync();
             }
             catch (Exception ex)
@@ -169,7 +168,6 @@ namespace ChatServer.Core.Net
                 packet.WriteMessage(user.UID.ToString());
 
                 await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
-
                 Console.WriteLine($"[{DateTime.Now}]: User {username} registered successfully with UID {UID}");
             }
             catch (Exception ex)
@@ -201,7 +199,6 @@ namespace ChatServer.Core.Net
                 packet.WriteMessage(user.UID.ToString());
 
                 await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
-
                 Console.WriteLine($"[{DateTime.Now}]: User {username} logged in successfully with UID {UID}");
             }
             catch (Exception ex)
@@ -232,19 +229,17 @@ namespace ChatServer.Core.Net
             try
             {
                 var recentMessages = await _messageRepository.GetRecentBroadcastMessagesAsync(30);
-
                 var orderedMessages = recentMessages.Reverse();
 
                 foreach (var message in orderedMessages)
                 {
-                    var formattedMessage = $"[{message.SentAt.ToString("yyyy-MM-dd HH:mm:ss")}]: [{message.Sender.UserName}]: {message.Content}";
+                    var formattedMessage = $"[{message.SentAt:yyyy-MM-dd HH:mm:ss}]: [{message.Sender.UserName}]: {message.Content}";
 
                     using var historyPacket = new PacketBuilder();
                     historyPacket.WriteOpCode(OpCodes.MessageHistory);
                     historyPacket.WriteMessage(formattedMessage);
 
                     await ClientSocket.Client.SendAsync(historyPacket.GetPacketBytes(), SocketFlags.None);
-
                     await Task.Delay(10);
                 }
 
@@ -261,18 +256,11 @@ namespace ChatServer.Core.Net
             }
         }
 
-        public void Disconnect()
-        {
-            _isConnected = false;
-        }
+        public void Disconnect() => _isConnected = false;
 
         public void Dispose()
         {
-            if (ClientSocket != null && ClientSocket.Connected)
-            {
-                ClientSocket.Close();
-            }
-
+            ClientSocket?.Close();
             (_packetReader as IDisposable)?.Dispose();
         }
     }

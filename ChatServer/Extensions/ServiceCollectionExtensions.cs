@@ -30,7 +30,12 @@ namespace ChatServer.Extensions
             services.AddSingleton<IClientManager>(provider => provider.GetRequiredService<ClientManager>());
 
             services.AddSingleton<MessageHandlerService>();
-            services.AddSingleton<IMessageHandler>(provider => provider.GetRequiredService<MessageHandlerService>());
+            services.AddSingleton<IMessageHandler>(provider =>
+            new MessageHandlerService(
+                provider.GetRequiredService<IClientManager>(),
+                provider.GetRequiredService<IMessageRepository>(),
+                provider.GetRequiredService<IUserRepository>()
+            ));
 
             services.AddScoped<ServerService>();
 

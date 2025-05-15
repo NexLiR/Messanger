@@ -29,8 +29,7 @@ namespace ChatServer.Core.Net
 
         public async Task StartAsync(CancellationToken cancellationToken = default)
         {
-            if (_isRunning)
-                return;
+            if (_isRunning) return;
 
             _isRunning = true;
             _listener = new TcpListener(IPAddress.Parse(ServerConfig.DefaultIpAddress), ServerConfig.DefaultPort);
@@ -47,9 +46,6 @@ namespace ChatServer.Core.Net
                     try
                     {
                         var client = new Client(tcpClient, _clientManager, _messageHandler, _userRepository, _messageRepository);
-                        _clientManager.AddClient(client);
-
-                        await _clientManager.BroadcastConnectionAsync();
 
                         _ = Task.Run(() => client.ProcessAsync());
                     }
@@ -76,8 +72,7 @@ namespace ChatServer.Core.Net
 
         public void Stop()
         {
-            if (!_isRunning)
-                return;
+            if (!_isRunning) return;
 
             _isRunning = false;
             _listener?.Stop();
