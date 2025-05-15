@@ -83,11 +83,17 @@ namespace ChatApp.Core.Net
                             var disconnectedUserId = _packetReader.ReadMessage();
                             OnUserDisconnected?.Invoke(disconnectedUserId);
                             break;
+                        case OpCodes.Disconnected:
+                            var dUserId = _packetReader.ReadMessage();
+                            var dUserName = _packetReader.ReadMessage();
+                            OnUserDisconnected?.Invoke(dUserId);
+                            break;
                     }
                 }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Connection error: {ex.Message}");
                 OnUserDisconnected?.Invoke(null);
                 _isConnected = false;
             }
