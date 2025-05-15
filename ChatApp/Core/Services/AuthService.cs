@@ -14,23 +14,28 @@ namespace ChatApp.Core.Services
         private CancellationTokenSource _cancellationTokenSource;
         private bool _isAuthenticated = false;
         private string _currentUsername = string.Empty;
+        private string _currentUserId = string.Empty;
 
         public event Action<string> OnAuthSuccessful;
         public event Action<string> OnAuthFailed;
 
         public bool IsAuthenticated => _isAuthenticated;
         public string CurrentUsername => _currentUsername;
+        public string CurrentUserId => _currentUserId;
 
         public AuthService()
         {
-            _client = new TcpClient();
             _cancellationTokenSource = new CancellationTokenSource();
         }
 
         private async Task EnsureConnectedAsync()
         {
-            if (_client.Connected)
-                return;
+            if (_client != null && _client.Connected)
+            {
+                _client.Close();
+            }
+
+            _client = new TcpClient();
 
             try
             {
@@ -50,7 +55,7 @@ namespace ChatApp.Core.Services
         {
             try
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
+                while (!_cancellationTokenSource.Token.IsCancellationRequested && _client.Connected)
                 {
                     var opCode = _packetReader.ReadByte();
                     switch (opCode)
@@ -60,8 +65,11 @@ namespace ChatApp.Core.Services
                             var userId = _packetReader.ReadMessage();
                             _isAuthenticated = true;
                             _currentUsername = username;
+                            _currentUserId = userId;
                             OnAuthSuccessful?.Invoke(username);
-                            break;
+
+                            return;
+
                         case OpCodes.AuthFailed:
                             var errorMessage = _packetReader.ReadMessage();
                             OnAuthFailed?.Invoke(errorMessage);
@@ -74,7 +82,10 @@ namespace ChatApp.Core.Services
                 OnAuthFailed?.Invoke($"Connection error: {ex.Message}");
             }
         }
-
+        public TcpClient GetExistingConnection()
+        {
+            return _client;
+        }
         public async Task RegisterAsync(string username, string password)
         {
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
@@ -121,11 +132,25 @@ namespace ChatApp.Core.Services
         {
             _isAuthenticated = false;
             _currentUsername = string.Empty;
+            _currentUserId = string.Empty;
 
-            if (_client.Connected)
+            if (_client != null && _client.Connected)
             {
-                _client.Close();
-                _client = new TcpClient();
+                try
+                {
+                    using var logoutPacket = new PacketBuilder();
+                    logoutPacket.WriteOpCode(OpCodes.Logout);
+                    logoutPacket.WriteMessage(_currentUsername);
+                    await _client.Client.SendAsync(logoutPacket.GetPacketBytes(), SocketFlags.None);
+                }
+                catch
+                {
+                }
+                finally
+                {
+                    _client.Close();
+                    _client = null;
+                }
             }
         }
 

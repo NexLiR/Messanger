@@ -1,6 +1,6 @@
 ﻿using ChatServer.Core.Interfaces;
 using ChatServer.Core.Net;
-using ChatServer.Data.Repositories;
+using ChatServer.Data.Repositories.Interfaces;
 
 namespace ChatServer.Core.Services
 {

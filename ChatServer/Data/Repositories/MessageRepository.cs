@@ -1,4 +1,5 @@
 ﻿using ChatServer.Data.Entities;
+using ChatServer.Data.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChatServer.Data.Repositories

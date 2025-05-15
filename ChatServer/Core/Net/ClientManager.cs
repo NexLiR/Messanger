@@ -20,6 +20,8 @@ namespace ChatServer.Core.Net
             {
                 _clients.Add(client);
             }
+
+            Console.WriteLine($"[{DateTime.Now}]: Client {client.UserName} added to client manager. Active clients: {_clients.Count}");
         }
 
         public void RemoveClient(IClient client)
@@ -31,6 +33,8 @@ namespace ChatServer.Core.Net
             {
                 _clients.Remove(client);
             }
+
+            Console.WriteLine($"[{DateTime.Now}]: Client {client.UserName} removed from client manager. Active clients: {_clients.Count}");
         }
 
         public async Task BroadcastConnectionAsync()
@@ -42,24 +46,32 @@ namespace ChatServer.Core.Net
                 clientsCopy = _clients.ToList().AsReadOnly();
             }
 
-            foreach (var user in clientsCopy)
+            foreach (var receiver in clientsCopy)
             {
-                foreach (var client in clientsCopy)
+                foreach (var sender in clientsCopy)
                 {
+                    if (!receiver.ClientSocket.Connected)
+                    {
+                        Console.WriteLine($"[{DateTime.Now}]: Cannot broadcast to {receiver.UserName} - client disconnected");
+                        continue;
+                    }
+
                     try
                     {
                         using var broadcastPacket = new PacketBuilder();
                         broadcastPacket.WriteOpCode(OpCodes.Connected);
-                        broadcastPacket.WriteMessage(client.UserName);
-                        broadcastPacket.WriteMessage(client.UID.ToString());
+                        broadcastPacket.WriteMessage(sender.UserName);
+                        broadcastPacket.WriteMessage(sender.UID.ToString());
 
-                        await user.ClientSocket.Client.SendAsync(
+                        await receiver.ClientSocket.Client.SendAsync(
                             broadcastPacket.GetPacketBytes(),
                             System.Net.Sockets.SocketFlags.None);
+
+                        Console.WriteLine($"[{DateTime.Now}]: Sent user {sender.UserName} info to {receiver.UserName}");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error broadcasting connection to {user.UserName}: {ex.Message}");
+                        Console.WriteLine($"[{DateTime.Now}]: Error broadcasting connection of {sender.UserName} to {receiver.UserName}: {ex.Message}");
                     }
                 }
             }
@@ -77,8 +89,15 @@ namespace ChatServer.Core.Net
                 clientsCopy = _clients.ToList().AsReadOnly();
             }
 
+            int successCount = 0;
             foreach (var client in clientsCopy)
             {
+                if (!client.ClientSocket.Connected)
+                {
+                    Console.WriteLine($"[{DateTime.Now}]: Cannot broadcast message to {client.UserName} - client disconnected");
+                    continue;
+                }
+
                 try
                 {
                     using var messagePacket = new PacketBuilder();
@@ -88,12 +107,16 @@ namespace ChatServer.Core.Net
                     await client.ClientSocket.Client.SendAsync(
                         messagePacket.GetPacketBytes(),
                         System.Net.Sockets.SocketFlags.None);
+
+                    successCount++;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error broadcasting message to {client.UserName}: {ex.Message}");
+                    Console.WriteLine($"[{DateTime.Now}]: Error broadcasting message to {client.UserName}: {ex.Message}");
                 }
             }
+
+            Console.WriteLine($"[{DateTime.Now}]: Message broadcast to {successCount} of {clientsCopy.Count} clients");
         }
 
         public async Task BroadcastDisconnectAsync(string uid)
@@ -101,8 +124,8 @@ namespace ChatServer.Core.Net
             if (string.IsNullOrEmpty(uid))
                 throw new ArgumentException("UID cannot be null or empty", nameof(uid));
 
-            IClient? disconnectedClient = null;
-            IReadOnlyList<IClient> clientsCopy;
+            IClient disconnectedClient = null;
+            IReadOnlyList<IClient> remainingClients;
 
             lock (_lock)
             {
@@ -111,33 +134,50 @@ namespace ChatServer.Core.Net
                 if (disconnectedClient != null)
                 {
                     _clients.Remove(disconnectedClient);
+                    Console.WriteLine($"[{DateTime.Now}]: Removed disconnected client {disconnectedClient.UserName} from client list");
+                }
+                else
+                {
+                    Console.WriteLine($"[{DateTime.Now}]: Could not find client with UID {uid} to remove");
                 }
 
-                clientsCopy = _clients.ToList().AsReadOnly();
+                remainingClients = _clients.ToList().AsReadOnly();
             }
 
             if (disconnectedClient == null)
                 return;
 
-            foreach (var client in clientsCopy)
+            int successCount = 0;
+            foreach (var client in remainingClients)
             {
+                if (!client.ClientSocket.Connected)
+                {
+                    Console.WriteLine($"[{DateTime.Now}]: Cannot broadcast disconnect to {client.UserName} - client disconnected");
+                    continue;
+                }
+
                 try
                 {
                     using var broadcastPacket = new PacketBuilder();
                     broadcastPacket.WriteOpCode(OpCodes.Disconnected);
                     broadcastPacket.WriteMessage(uid);
+                    broadcastPacket.WriteMessage(disconnectedClient.UserName);
 
                     await client.ClientSocket.Client.SendAsync(
                         broadcastPacket.GetPacketBytes(),
                         System.Net.Sockets.SocketFlags.None);
+
+                    successCount++;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error broadcasting disconnect to {client.UserName}: {ex.Message}");
+                    Console.WriteLine($"[{DateTime.Now}]: Error broadcasting disconnect to {client.UserName}: {ex.Message}");
                 }
             }
 
-            await BroadcastMessageAsync($"User <{disconnectedClient.UserName}> disconnected.");
+            Console.WriteLine($"[{DateTime.Now}]: Disconnect notification for {disconnectedClient.UserName} broadcast to {successCount} of {remainingClients.Count} clients");
+
+            await BroadcastMessageAsync($"System: User {disconnectedClient.UserName} disconnected.");
         }
     }
 }

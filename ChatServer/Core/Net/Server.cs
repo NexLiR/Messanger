@@ -2,9 +2,7 @@
 using ChatServer.Core.Interfaces;
 using System.Net.Sockets;
 using System.Net;
-using ChatServer.Data.Repositories;
-using ChatServer.Data;
-using Microsoft.EntityFrameworkCore;
+using ChatServer.Data.Repositories.Interfaces;
 
 namespace ChatServer.Core.Net
 {
