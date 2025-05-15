@@ -1,5 +1,5 @@
 ﻿using ChatServer.Core.Interfaces;
-using ChatServer.Data.Repositories;
+using ChatServer.Data.Repositories.Interfaces;
 
 namespace ChatServer.Core.Services
 {
@@ -27,17 +27,35 @@ namespace ChatServer.Core.Services
             if (string.IsNullOrEmpty(message))
                 throw new ArgumentException("Message cannot be null or empty", nameof(message));
 
+            if (client.UID == Guid.Empty)
+            {
+                Console.WriteLine($"Client has no UID assigned.");
+                return;
+            }
+
             var user = await _userRepository.GetByUidAsync(client.UID);
+
             if (user == null)
             {
                 Console.WriteLine($"User with UID {client.UID} not found in database.");
                 return;
             }
 
-            await _messageRepository.SaveMessageAsync(message, user.Id);
+            try
+            {
+                await _messageRepository.SaveMessageAsync(message, user.Id);
 
-            var formattedMessage = $"[{DateTime.Now}]: [{client.UserName}]: {message}";
-            await _clientManager.BroadcastMessageAsync(formattedMessage);
+                var formattedMessage = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}]: [{client.UserName}]: {message}";
+
+                await _clientManager.BroadcastMessageAsync(formattedMessage);
+
+                Console.WriteLine($"Message from {client.UserName} successfully processed and broadcast");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling message: {ex.Message}");
+                throw;
+            }
         }
     }
 }

@@ -20,8 +20,8 @@ namespace ChatApp.MVVM.ViewModel
         public ObservableCollection<string> Messages => new(_messageService.GetMessages());
         public ObservableCollection<string> Users => new(_userService.GetUserNames());
 
-        public ICommand SendMessageCommand { get; set; }
-        public ICommand LogoutCommand { get; set; }
+        public ICommand SendMessageCommand { get; private set; }
+        public ICommand LogoutCommand { get; private set; }
 
         private string _message;
         public string Message
@@ -42,10 +42,13 @@ namespace ChatApp.MVVM.ViewModel
             IUserService userService,
             IAuthService authService)
         {
-            _serverConnection = serverConnection;
-            _messageService = messageService;
-            _userService = userService;
-            _authService = authService;
+            _serverConnection = serverConnection ?? throw new ArgumentNullException(nameof(serverConnection));
+            _messageService = messageService ?? throw new ArgumentNullException(nameof(messageService));
+            _userService = userService ?? throw new ArgumentNullException(nameof(userService));
+            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+
+            _userService.ClearUsers();
+            _messageService.ClearMessages();
 
             InitializeServerConnectionEvents();
             InitializeCommands();
@@ -55,21 +58,47 @@ namespace ChatApp.MVVM.ViewModel
 
         private void InitializeServerConnectionEvents()
         {
-            _serverConnection.OnMessageReceived += HandleMessageReceived;
-            _serverConnection.OnUserConnected += HandleUserConnected;
-            _serverConnection.OnUserDisconnected += HandleUserDisconnected;
+            _serverConnection.OnMessageReceived += message =>
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    _messageService.AddMessage(message);
+                    OnPropertyChanged(nameof(Messages));
+                });
+            };
+
+            _serverConnection.OnUserConnected += userName =>
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    _userService.AddUser(userName);
+                    OnPropertyChanged(nameof(Users));
+                });
+            };
+
+            _serverConnection.OnUserDisconnected += userId =>
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    if (!string.IsNullOrWhiteSpace(userId))
+                    {
+                        _userService.RemoveUser(userId);
+                        OnPropertyChanged(nameof(Users));
+                    }
+                });
+            };
         }
 
         private void InitializeCommands()
         {
             SendMessageCommand = new RelayCommand(
                 async _ => await SendMessageAsync(),
-                _ => !string.IsNullOrWhiteSpace(Message)
+                _ => !string.IsNullOrWhiteSpace(Message) && _serverConnection != null
             );
 
             LogoutCommand = new RelayCommand(
                 async _ => await LogoutAsync(),
-                _ => true
+                _ => _authService.IsAuthenticated
             );
         }
 
@@ -77,7 +106,7 @@ namespace ChatApp.MVVM.ViewModel
         {
             try
             {
-                await _serverConnection.ConnectAsync(_authService.CurrentUsername);
+                await _serverConnection.UseExistingConnectionAsync(_authService.CurrentUsername);
             }
             catch (Exception ex)
             {
@@ -87,6 +116,9 @@ namespace ChatApp.MVVM.ViewModel
 
         private async Task SendMessageAsync()
         {
+            if (string.IsNullOrWhiteSpace(Message))
+                return;
+
             try
             {
                 await _serverConnection.SendMessageAsync(Message);
@@ -105,40 +137,13 @@ namespace ChatApp.MVVM.ViewModel
                 await _serverConnection.DisconnectAsync();
                 await _authService.LogoutAsync();
 
-                _messageService.ClearMessages();
                 _userService.ClearUsers();
+                _messageService.ClearMessages();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Logout error: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private void HandleMessageReceived(string message)
-        {
-            Application.Current.Dispatcher.Invoke(() => {
-                _messageService.AddMessage(message);
-                OnPropertyChanged(nameof(Messages));
-            });
-        }
-
-        private void HandleUserConnected(string userName)
-        {
-            Application.Current.Dispatcher.Invoke(() => {
-                _userService.AddUser(userName);
-                OnPropertyChanged(nameof(Users));
-            });
-        }
-
-        private void HandleUserDisconnected(string userName)
-        {
-            Application.Current.Dispatcher.Invoke(() => {
-                if (!string.IsNullOrWhiteSpace(userName))
-                {
-                    _userService.RemoveUser(userName);
-                    OnPropertyChanged(nameof(Users));
-                }
-            });
         }
 
         protected virtual void OnPropertyChanged(string propertyName)

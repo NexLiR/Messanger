@@ -1,6 +1,6 @@
 ﻿using ChatServer.Data.Entities;
 
-namespace ChatServer.Data.Repositories
+namespace ChatServer.Data.Repositories.Interfaces
 {
     public interface IUserRepository
     {

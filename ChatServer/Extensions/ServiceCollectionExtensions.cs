@@ -3,6 +3,7 @@ using ChatServer.Core.Net;
 using ChatServer.Core.Services;
 using ChatServer.Data;
 using ChatServer.Data.Repositories;
+using ChatServer.Data.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

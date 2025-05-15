@@ -9,5 +9,6 @@
         Task ConnectAsync(string userName);
         Task SendMessageAsync(string message);
         Task DisconnectAsync();
+        Task UseExistingConnectionAsync(string userName);
     }
 }
