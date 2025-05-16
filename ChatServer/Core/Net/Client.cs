@@ -1,18 +1,21 @@
 ﻿using ChatServer.Core.Interfaces;
 using System.Net.Sockets;
 using ChatServer.Constants;
-using ChatServer.Core.Net.IO;
 using ChatServer.Data.Entities;
 using ChatServer.Data.Repositories.Interfaces;
+using ChatServer.Core.Factories.Interfaces;
+using ChatServer.Core.Factories;
+using ChatServer.Core.Net.ClientOperations.Interfaces;
+using ChatServer.Core.Net.ClientOperations;
 
 namespace ChatServer.Core.Net
 {
     public class Client : IClient, IDisposable
     {
-        private readonly IUserRepository _userRepository;
-        private readonly IMessageRepository _messageRepository;
+        private readonly IClientOperationFactory _clientOperationFactory;
+        private readonly IPacketReaderFactory _packetReaderFactory;
         private readonly IClientManager _clientManager;
-        private readonly IMessageHandler _messageHandler;
+        private readonly IPacketBuilderFactory _packetBuilderFactory;
         private readonly IPacketReader _packetReader;
         private User _user;
 
@@ -20,23 +23,41 @@ namespace ChatServer.Core.Net
         private bool _isAuthenticated = false;
 
         public string UserName { get; set; }
-        public Guid UID { get; private set; } = Guid.Empty;
+        public Guid UID { get; set; } = Guid.Empty;
         public TcpClient ClientSocket { get; }
+        public bool IsAuthenticated => _isAuthenticated;
 
         public Client(
             TcpClient clientSocket,
             IClientManager clientManager,
             IMessageHandler messageHandler,
             IUserRepository userRepository,
-            IMessageRepository messageRepository)
+            IMessageRepository messageRepository,
+            IPacketReaderFactory packetReaderFactory)
         {
             ClientSocket = clientSocket ?? throw new ArgumentNullException(nameof(clientSocket));
             _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
-            _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
-            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
-            _messageRepository = messageRepository ?? throw new ArgumentNullException(nameof(messageRepository));
+            _packetReaderFactory = packetReaderFactory ?? throw new ArgumentNullException(nameof(packetReaderFactory));
 
-            _packetReader = new PacketReader(ClientSocket.GetStream());
+            var packetBuilderFactory = new PacketBuilderFactory();
+            _packetBuilderFactory = packetBuilderFactory;
+
+            var messageOperation = new MessageOperation(messageHandler);
+            var registerOperation = new RegisterOperation(userRepository, packetBuilderFactory);
+            var loginOperation = new LoginOperation(userRepository, packetBuilderFactory);
+            var identifyOperation = new IdentifyOperation(userRepository, messageRepository, clientManager);
+            var disconnectOperation = new DisconnectOperation();
+            var logoutOperation = new LogoutOperation();
+
+            _clientOperationFactory = new ClientOperationFactory(
+                messageOperation,
+                registerOperation,
+                loginOperation,
+                identifyOperation,
+                disconnectOperation,
+                logoutOperation);
+
+            _packetReader = _packetReaderFactory.CreatePacketReader(ClientSocket.GetStream());
 
             Console.WriteLine($"[{DateTime.Now}]: New connection established: {ClientSocket.Client.RemoteEndPoint}");
         }
@@ -51,52 +72,14 @@ namespace ChatServer.Core.Net
                     {
                         var opCode = _packetReader.ReadByte();
 
-                        switch (opCode)
+                        try
                         {
-                            case OpCodes.Message:
-                                if (!_isAuthenticated)
-                                {
-                                    SendAuthFailedMessage("You must authenticate first.");
-                                    continue;
-                                }
-                                var message = _packetReader.ReadMessage();
-                                Console.WriteLine($"[{DateTime.Now}]: Message received from {UserName}: {message}");
-                                await _messageHandler.HandleMessageAsync(this, message);
-                                break;
-
-                            case OpCodes.Register:
-                                var registerUsername = _packetReader.ReadMessage();
-                                var registerPassword = _packetReader.ReadMessage();
-                                await HandleRegisterAsync(registerUsername, registerPassword);
-                                break;
-
-                            case OpCodes.Login:
-                                var loginUsername = _packetReader.ReadMessage();
-                                var loginPassword = _packetReader.ReadMessage();
-                                await HandleLoginAsync(loginUsername, loginPassword);
-                                break;
-
-                            case OpCodes.Identify:
-                                var identifyUsername = _packetReader.ReadMessage();
-                                await HandleIdentifyAsync(identifyUsername);
-                                break;
-
-                            case OpCodes.Disconnect:
-                                var username = _packetReader.ReadMessage();
-                                Console.WriteLine($"[{DateTime.Now}]: User {username} requested disconnect");
-                                _isConnected = false;
-                                break;
-
-                            case OpCodes.Logout:
-                                var logoutUsername = _packetReader.ReadMessage();
-                                Console.WriteLine($"[{DateTime.Now}]: User {logoutUsername} logged out");
-                                _isAuthenticated = false;
-                                _user = null;
-                                break;
-
-                            default:
-                                Console.WriteLine($"[{DateTime.Now}]: Unknown opcode: {opCode}");
-                                break;
+                            var operation = _clientOperationFactory.GetOperation(opCode);
+                            await operation.ExecuteAsync(this, _packetReader);
+                        }
+                        catch (ArgumentException)
+                        {
+                            Console.WriteLine($"[{DateTime.Now}]: Unknown opcode: {opCode}");
                         }
                     }
                     catch (InvalidOperationException ex)
@@ -122,96 +105,11 @@ namespace ChatServer.Core.Net
             }
         }
 
-        private async Task HandleIdentifyAsync(string username)
+        public void SendAuthFailedMessage(string message)
         {
             try
             {
-                var user = await _userRepository.GetByUsernameAsync(username);
-                if (user == null)
-                {
-                    SendAuthFailedMessage($"User '{username}' not found.");
-                    return;
-                }
-
-                _user = user;
-                UserName = user.UserName;
-                UID = user.UID;
-                _isAuthenticated = true;
-
-                Console.WriteLine($"[{DateTime.Now}]: User {username} identified with UID {UID}");
-
-                await SendMessageHistoryAsync();
-
-                _clientManager.AddClient(this);
-                await _clientManager.BroadcastConnectionAsync();
-            }
-            catch (Exception ex)
-            {
-                SendAuthFailedMessage($"Identification failed: {ex.Message}");
-            }
-        }
-
-        private async Task HandleRegisterAsync(string username, string password)
-        {
-            try
-            {
-                var user = await _userRepository.CreateUserAsync(username, password);
-
-                UserName = user.UserName;
-                UID = user.UID;
-                _user = user;
-                _isAuthenticated = true;
-
-                using var packet = new PacketBuilder();
-                packet.WriteOpCode(OpCodes.AuthSuccess);
-                packet.WriteMessage(user.UserName);
-                packet.WriteMessage(user.UID.ToString());
-
-                await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
-                Console.WriteLine($"[{DateTime.Now}]: User {username} registered successfully with UID {UID}");
-            }
-            catch (Exception ex)
-            {
-                SendAuthFailedMessage($"Registration failed: {ex.Message}");
-            }
-        }
-
-        private async Task HandleLoginAsync(string username, string password)
-        {
-            try
-            {
-                var user = await _userRepository.AuthenticateUserAsync(username, password);
-
-                if (user == null)
-                {
-                    SendAuthFailedMessage("Invalid username or password");
-                    return;
-                }
-
-                UserName = user.UserName;
-                UID = user.UID;
-                _user = user;
-                _isAuthenticated = true;
-
-                using var packet = new PacketBuilder();
-                packet.WriteOpCode(OpCodes.AuthSuccess);
-                packet.WriteMessage(user.UserName);
-                packet.WriteMessage(user.UID.ToString());
-
-                await ClientSocket.Client.SendAsync(packet.GetPacketBytes(), SocketFlags.None);
-                Console.WriteLine($"[{DateTime.Now}]: User {username} logged in successfully with UID {UID}");
-            }
-            catch (Exception ex)
-            {
-                SendAuthFailedMessage($"Login failed: {ex.Message}");
-            }
-        }
-
-        private void SendAuthFailedMessage(string message)
-        {
-            try
-            {
-                using var packet = new PacketBuilder();
+                var packet = _packetBuilderFactory.CreatePacketBuilder();
                 packet.WriteOpCode(OpCodes.AuthFailed);
                 packet.WriteMessage(message);
 
@@ -224,18 +122,18 @@ namespace ChatServer.Core.Net
             }
         }
 
-        private async Task SendMessageHistoryAsync()
+        public async Task SendMessageHistoryAsync(IMessageRepository messageRepository)
         {
             try
             {
-                var recentMessages = await _messageRepository.GetRecentBroadcastMessagesAsync(30);
+                var recentMessages = await messageRepository.GetRecentBroadcastMessagesAsync(30);
                 var orderedMessages = recentMessages.Reverse();
 
                 foreach (var message in orderedMessages)
                 {
                     var formattedMessage = $"[{message.SentAt:yyyy-MM-dd HH:mm:ss}]: [{message.Sender.UserName}]: {message.Content}";
 
-                    using var historyPacket = new PacketBuilder();
+                    var historyPacket = _packetBuilderFactory.CreatePacketBuilder();
                     historyPacket.WriteOpCode(OpCodes.MessageHistory);
                     historyPacket.WriteMessage(formattedMessage);
 
@@ -243,7 +141,7 @@ namespace ChatServer.Core.Net
                     await Task.Delay(10);
                 }
 
-                using var completionPacket = new PacketBuilder();
+                var completionPacket = _packetBuilderFactory.CreatePacketBuilder();
                 completionPacket.WriteOpCode(OpCodes.MessageHistory);
                 completionPacket.WriteMessage("--- End of message history ---");
                 await ClientSocket.Client.SendAsync(completionPacket.GetPacketBytes(), SocketFlags.None);
@@ -254,6 +152,16 @@ namespace ChatServer.Core.Net
             {
                 Console.WriteLine($"[{DateTime.Now}]: Error sending message history: {ex.Message}");
             }
+        }
+
+        public void SetUser(User user)
+        {
+            _user = user;
+        }
+
+        public void SetAuthenticated(bool authenticated)
+        {
+            _isAuthenticated = authenticated;
         }
 
         public void Disconnect() => _isConnected = false;

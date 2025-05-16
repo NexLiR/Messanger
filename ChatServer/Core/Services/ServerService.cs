@@ -1,31 +1,15 @@
-﻿using ChatServer.Core.Interfaces;
-using ChatServer.Core.Net;
-using ChatServer.Data.Repositories.Interfaces;
+﻿using ChatServer.Core.Net;
 
 namespace ChatServer.Core.Services
 {
     public class ServerService
     {
-        private readonly IClientManager _clientManager;
-        private readonly IMessageHandler _messageHandler;
-        private readonly IUserRepository _userRepository;
-        private readonly IMessageRepository _messageRepository;
-        private Server _server;
+        private readonly Server _server;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
-        public ServerService(
-            IClientManager clientManager,
-            IMessageHandler messageHandler,
-            IUserRepository userRepository,
-            IMessageRepository messageRepository)
+        public ServerService(Server server)
         {
-            _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
-            _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
-            _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
-            _messageRepository = messageRepository ?? throw new ArgumentNullException(nameof(messageRepository));
-
-            _server = new Server(_clientManager, _messageHandler, _userRepository, _messageRepository);
-            
+            _server = server ?? throw new ArgumentNullException(nameof(server));
         }
 
         public async Task StartAsync()
