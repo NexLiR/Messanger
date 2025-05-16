@@ -1,9 +1,11 @@
-﻿namespace ChatApp.Core.Services.Interfaces
+﻿using ChatApp.MVVM.Model;
+
+namespace ChatApp.Core.Services.Interfaces
 {
     public interface IMessageService
     {
-        IEnumerable<string> GetMessages();
-        void AddMessage(string message);
+        IEnumerable<MessageModel> GetMessages();
+        void AddMessage(MessageModel message);
         void ClearMessages();
     }
 }

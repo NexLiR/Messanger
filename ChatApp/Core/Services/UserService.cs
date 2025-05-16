@@ -1,27 +1,33 @@
 ﻿using ChatApp.Core.Services.Interfaces;
+using ChatApp.MVVM.Model;
 using System.Collections.ObjectModel;
 
 namespace ChatApp.Core.Services
 {
     public class UserService : IUserService
     {
-        private readonly ObservableCollection<string> _users = new();
+        private readonly ObservableCollection<UserModel> _users = new();
 
-        public IEnumerable<string> GetUserNames() => _users;
+        public IEnumerable<UserModel> GetUsers() => _users;
 
-        public void AddUser(string userName)
+        public void AddUser(UserModel user)
         {
-            if (!string.IsNullOrWhiteSpace(userName) && !_users.Contains(userName))
+            if (user != null && !string.IsNullOrWhiteSpace(user.UserName) &&
+                !_users.Any(u => u.UserId == user.UserId))
             {
-                _users.Add(userName);
+                _users.Add(user);
             }
         }
 
-        public void RemoveUser(string userName)
+        public void RemoveUser(string userId)
         {
-            if (!string.IsNullOrWhiteSpace(userName))
+            if (!string.IsNullOrWhiteSpace(userId))
             {
-                _users.Remove(userName);
+                var user = _users.FirstOrDefault(u => u.UserId == userId);
+                if (user != null)
+                {
+                    _users.Remove(user);
+                }
             }
         }
 

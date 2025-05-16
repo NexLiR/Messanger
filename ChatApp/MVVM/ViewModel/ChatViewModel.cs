@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows;
+using ChatApp.MVVM.Model;
 
 namespace ChatApp.MVVM.ViewModel
 {
@@ -17,8 +18,8 @@ namespace ChatApp.MVVM.ViewModel
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        public ObservableCollection<string> Messages => new(_messageService.GetMessages());
-        public ObservableCollection<string> Users => new(_userService.GetUserNames());
+        public ObservableCollection<MessageModel> Messages => new(_messageService.GetMessages());
+        public ObservableCollection<UserModel> Users => new(_userService.GetUsers());
 
         public ICommand SendMessageCommand { get; private set; }
         public ICommand LogoutCommand { get; private set; }
@@ -62,16 +63,14 @@ namespace ChatApp.MVVM.ViewModel
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    _messageService.AddMessage(message);
                     OnPropertyChanged(nameof(Messages));
                 });
             };
 
-            _serverConnection.OnUserConnected += userName =>
+            _serverConnection.OnUserConnected += user =>
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    _userService.AddUser(userName);
                     OnPropertyChanged(nameof(Users));
                 });
             };
@@ -82,7 +81,6 @@ namespace ChatApp.MVVM.ViewModel
                 {
                     if (!string.IsNullOrWhiteSpace(userId))
                     {
-                        _userService.RemoveUser(userId);
                         OnPropertyChanged(nameof(Users));
                     }
                 });

@@ -29,7 +29,7 @@
                       Margin="5">
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" Margin="5,2"/>
+                        <TextBlock Text="{Binding UserName}" Margin="5,2"/>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
@@ -42,14 +42,25 @@
             </Grid.RowDefinitions>
 
             <ListView Grid.Row="0" 
-                      ItemsSource="{Binding Messages}"
-                      Margin="5">
+          ItemsSource="{Binding Messages}"
+          Margin="5">
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="5,2"/>
+                        <StackPanel Margin="5,2">
+                            <TextBlock>
+                                <Run Text="{Binding SenderName}" FontWeight="Bold"/>
+                                <Run Text=" "/>
+                                <Run Text="{Binding Timestamp, StringFormat='({0:yyyy-MM-dd HH:mm})'}" Foreground="Gray" FontSize="10"/>
+                            </TextBlock>
+
+                            <TextBlock Text="{Binding Content}" 
+                           TextWrapping="Wrap" 
+                           Margin="10,2,0,0"/>
+                        </StackPanel>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
+
 
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>

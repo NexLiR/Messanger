@@ -1,10 +1,12 @@
-﻿namespace ChatApp.Core.Services.Interfaces
+﻿using ChatApp.MVVM.Model;
+
+namespace ChatApp.Core.Services.Interfaces
 {
     public interface IUserService
     {
-        IEnumerable<string> GetUserNames();
-        void AddUser(string userName);
-        void RemoveUser(string userName);
+        IEnumerable<UserModel> GetUsers();
+        void AddUser(UserModel user);
+        void RemoveUser(string userId);
         void ClearUsers();
     }
 }

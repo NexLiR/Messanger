@@ -1,5 +1,7 @@
 ﻿using ChatApp.Constants;
 using ChatApp.Core.Interfaces;
+using ChatApp.Core.Net.Handlers;
+using ChatApp.Core.Net.Handlers.PacketHandlers;
 using ChatApp.Core.Net.IO;
 using ChatApp.Core.Services.Interfaces;
 using System.Net.Sockets;
@@ -12,6 +14,7 @@ namespace ChatApp.Core.Services
         private IPacketReader _packetReader;
         private NetworkStream _networkStream;
         private CancellationTokenSource _cancellationTokenSource;
+        private readonly PacketHandlerFactory _handlerFactory;
         private bool _isAuthenticated = false;
         private string _currentUsername = string.Empty;
         private string _currentUserId = string.Empty;
@@ -26,6 +29,27 @@ namespace ChatApp.Core.Services
         public AuthService()
         {
             _cancellationTokenSource = new CancellationTokenSource();
+            _handlerFactory = new PacketHandlerFactory();
+
+            var authSuccessHandler = new AuthSuccessPacketHandler();
+            authSuccessHandler.OnAuthSuccessful += HandleAuthSuccess;
+            _handlerFactory.RegisterHandler(authSuccessHandler);
+
+            var authFailedHandler = new AuthFailedPacketHandler();
+            authFailedHandler.OnAuthFailed += HandleAuthFailed;
+            _handlerFactory.RegisterHandler(authFailedHandler);
+        }
+        private void HandleAuthSuccess(string username, string userId)
+        {
+            _isAuthenticated = true;
+            _currentUsername = username;
+            _currentUserId = userId;
+            OnAuthSuccessful?.Invoke(username);
+        }
+
+        private void HandleAuthFailed(string errorMessage)
+        {
+            OnAuthFailed?.Invoke(errorMessage);
         }
 
         private async Task EnsureConnectedAsync()
@@ -58,22 +82,16 @@ namespace ChatApp.Core.Services
                 while (!_cancellationTokenSource.Token.IsCancellationRequested && _client.Connected)
                 {
                     var opCode = _packetReader.ReadByte();
-                    switch (opCode)
+                    var handler = _handlerFactory.GetHandler(opCode);
+
+                    if (handler != null)
                     {
-                        case OpCodes.AuthSuccess:
-                            var username = _packetReader.ReadMessage();
-                            var userId = _packetReader.ReadMessage();
-                            _isAuthenticated = true;
-                            _currentUsername = username;
-                            _currentUserId = userId;
-                            OnAuthSuccessful?.Invoke(username);
+                        await handler.HandleAsync(_packetReader);
 
+                        if (opCode == OpCodes.AuthSuccess)
+                        {
                             return;
-
-                        case OpCodes.AuthFailed:
-                            var errorMessage = _packetReader.ReadMessage();
-                            OnAuthFailed?.Invoke(errorMessage);
-                            break;
+                        }
                     }
                 }
             }
