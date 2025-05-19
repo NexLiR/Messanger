@@ -1,8 +1,8 @@
 ﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using ChatApp.Extensions;
 using ChatApp.MVVM.View;
+using ChatApp.Extensions;
 
 namespace ChatApp;
 
