@@ -106,3 +106,4 @@ UI клієнтського додатку реалізовано з викор�
 ![Chat](/Screenshots/image_2025-05-16_17-04-08.png)
 ![Two users online](/Screenshots/image_2025-05-16_17-10-04.png)
 ![Console log output](/Screenshots/image_2025-05-16_17-13-20.png)
+![Lines count](/Screenshots/image_2025-05-19_18-21-16.png)
